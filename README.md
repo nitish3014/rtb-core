@@ -1,7 +1,7 @@
 # RTB Core Library
 --- 
 
-This is a core library for GreenLight Recruitment. Will primarily be maintained for all entities.
+This is a core library for RTB. Will primarily be maintained for all entities.
 Can also be used for common functionalities to be used across different servicces.
 
 
