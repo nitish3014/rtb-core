@@ -1,0 +1,40 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: rtb-core
+
+  datasource:
+    driverClassName: org.postgresql.Driver
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/postgres}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
+
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    # Hibernate ddl auto (create, create-drop, validate, update)
+    # Change hibernate.ddl-auto value to validate when flyway is being used.
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: ${DATABASE_SCHEMA:public}
+        jdbc:
+          lob:
+            non_contextual_creation: true
+  flyway:
+    enabled: false
+    schemas: ${DATABASE_SCHEMA:public}
+    baseline-on-migrate: true
+
+#aws:
+#  access-key-id: ${AWS_ACCESS_KEY_ID}
+#  secret-access-key: ${AWS_SECRET_ACCESS_KEY}
+#  region: ${AWS_REGION}
+#  account-id: ${AWS_ACCOUNT_ID}
+#  dashboard-id: ${AWS_DASHBOARD_ID}
+
+# Service configuration / env
+template-service:
+  environment: ${ENVIRONMENT:dev}

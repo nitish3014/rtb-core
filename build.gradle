@@ -1,0 +1,105 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.1.2'
+    id 'io.spring.dependency-management' version '1.1.2'
+    id 'checkstyle'
+    id 'maven-publish'
+    id 'org.flywaydb.flyway' version '8.5.13'
+}
+
+group = 'com.rtb.core'
+description = 'RTB core'
+version = '0.0.1-SNAPSHOT'
+
+java {
+    sourceCompatibility = '17'
+}
+
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+ext {
+    springVersion = "3.1.2"
+    postgresqlVersion = "42.6.0"
+    lombokVersion = "1.18.30"
+    logstashVersion = "6.4"
+    flywaydbVersion = "8.5.13"
+}
+
+dependencies {
+    implementation "org.springframework.boot:spring-boot-starter-web:${springVersion}"
+    implementation "org.springframework.boot:spring-boot-starter-actuator:${springVersion}"
+    implementation "org.springframework.boot:spring-boot-starter-data-jpa:${springVersion}"
+    implementation "net.logstash.logback:logstash-logback-encoder:${logstashVersion}"
+    implementation "org.flywaydb:flyway-core:${flywaydbVersion}"
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation "org.springframework.boot:spring-boot-starter-webflux:${springVersion}"
+
+    compileOnly "org.projectlombok:lombok:${lombokVersion}"
+    implementation 'javax.mail:javax.mail-api:1.6.2'
+    implementation 'com.sun.mail:javax.mail:1.6.2'
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation 'com.amazonaws:aws-java-sdk-s3:1.12.531'
+    implementation 'com.amazonaws:aws-java-sdk-ses:1.12.531'
+    implementation 'org.springframework.boot:spring-boot-starter-data-mongodb:3.4.1'
+
+    developmentOnly "org.springframework.boot:spring-boot-devtools:${springVersion}"
+
+    runtimeOnly "org.postgresql:postgresql:${postgresqlVersion}"
+
+    // https://mvnrepository.com/artifact/org.apache.commons/commons-text
+    implementation group: 'org.apache.commons', name: 'commons-text', version: '1.12.0'
+
+
+    annotationProcessor "org.projectlombok:lombok:${lombokVersion}"
+
+    testImplementation "org.springframework.boot:spring-boot-starter-test:${springVersion}"
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+checkstyle {
+    configFile file("checkstyle/checkstyle.xml")
+}
+
+jar {
+    enabled = true
+    archiveClassifier = '' //use empty string
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java  // This indicates that we're publishing the Java component (JAR)
+            groupId = 'com.rtb.core'  // Replace with your group ID
+            artifactId = 'core'  // Replace with your artifact ID
+            version = '0.0.1'  // Set the version for the artifact
+        }
+    }
+
+    repositories {
+        maven {
+            // Push to the local Maven repository (~/.m2/repository)
+            url = uri('file://' + new File(System.getProperty('user.home'), '.m2/repository'))
+        }
+    }
+
+//    flyway {
+//        url = 'jdbc:postgresql://localhost:5432/rt'
+//        user = 'postgres'
+//        password = 'postgres'
+//        schemas = ['public']
+//        baselineOnMigrate = true
+//    }
+
+}
+
