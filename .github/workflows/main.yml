@@ -6,12 +6,13 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  S3_BUCKET_NAME: rtb-dev-artifact          # ← updated bucket name
+  S3_BUCKET_NAME: rtb-dev-artifact
   S3_ARTIFACT_KEY: greenlight-rct-core-0.0.1-SNAPSHOT.jar
 
 jobs:
   build:
-    runs-on: [self-hosted, slave]
+    runs-on: ubuntu-latest           # ← use GitHub-hosted runner
+
     defaults:
       run:
         shell: bash
@@ -25,7 +26,6 @@ jobs:
 
       # 2️⃣ NOTIFY START
       - name: Notify Build Start
-        id: notify_start
         continue-on-error: true
         run: |
           set +e
@@ -50,13 +50,7 @@ jobs:
       - name: Clean & Build
         run: ./gradlew clean build -x test
 
-      # 5️⃣ PUBLISH TO SLAVE DIR
-      - name: Publish Artifact to Slave Directory
-        run: |
-          mkdir -p /home/ubuntu/core-artifact
-          cp build/libs/*.jar /home/ubuntu/core-artifact/${{ env.S3_ARTIFACT_KEY }}
-
-      # 6️⃣ CONFIGURE AWS & PUBLISH TO S3
+      # 5️⃣ CONFIGURE AWS & PUBLISH TO S3
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -68,7 +62,7 @@ jobs:
         run: |
           aws s3 cp build/libs/*.jar s3://${{ env.S3_BUCKET_NAME }}/${{ env.S3_ARTIFACT_KEY }}
 
-      # 7️⃣ NOTIFY RESULT
+      # 6️⃣ NOTIFY RESULT
       - name: Notify Build Result
         if: always()
         continue-on-error: true
