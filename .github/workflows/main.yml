@@ -7,7 +7,7 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  S3_BUCKET_NAME: rtb-dev-artifact
+  S3_BUCKET_NAME: rtb-dev--artifact
   S3_ARTIFACT_KEY: rtb-core-0.0.1-SNAPSHOT.jar
 
 jobs:
