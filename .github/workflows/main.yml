@@ -1,7 +1,5 @@
 name: CI Build Core
-
-on:
-  push:
+on: push:
     branches: [main]
 
 env:
@@ -11,20 +9,15 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest           # ← use GitHub-hosted runner
-
+    runs-on: ubuntu-latest
     defaults:
       run:
         shell: bash
 
     steps:
-      # 1️⃣ CHECKOUT
-      - name: Checkout code
-        uses: actions/checkout@v3
-        with:
-          ref: main
+      - uses: actions/checkout@v3
+        with: { ref: main }
 
-      # 2️⃣ NOTIFY START
       - name: Notify Build Start
         continue-on-error: true
         run: |
@@ -33,24 +26,14 @@ jobs:
           commit_message=${commit_details%%|*}
           committer_name=${commit_details##*|}
           read -r -d '' payload <<EOF
-          {"text":"🚀 *Build Started*\n*Repository:* ${GITHUB_REPOSITORY}\n*Run #:* ${GITHUB_RUN_NUMBER}\n*Commit:* ${commit_message}\n*Author:* ${committer_name}\n*URL:* ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"}
+          {"text":"🚀 *Build Started*\n*Repo:* ${GITHUB_REPOSITORY}\n*Run #:* ${GITHUB_RUN_NUMBER}\n*Commit:* ${commit_message}\n*By:* ${committer_name}\n*URL:* ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"}
           EOF
-          curl -X POST -H "Content-Type: application/json" \
+          echo ">>> PAYLOAD:"
+          echo "$payload"
+          curl -v -X POST -H "Content-Type: application/json" \
                --data "$payload" \
                "${{ secrets.GOOGLE_CHAT_WEBHOOK }}" || true
 
-      # 3️⃣ SET UP JAVA
-      - name: Set up JDK 17
-        uses: actions/setup-java@v3
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      # 4️⃣ CLEAN & BUILD
-      - name: Clean & Build
-        run: ./gradlew clean build -x test
-
-      # 5️⃣ CONFIGURE AWS & PUBLISH TO S3
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -58,11 +41,23 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Debug AWS identity
+        run: |
+          aws sts get-caller-identity || echo "❌ sts call failed—no AWS credentials"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Clean & Build
+        run: ./gradlew clean build -x test
+
       - name: Publish Artifact to S3
         run: |
           aws s3 cp build/libs/*.jar s3://${{ env.S3_BUCKET_NAME }}/${{ env.S3_ARTIFACT_KEY }}
 
-      # 6️⃣ NOTIFY RESULT
       - name: Notify Build Result
         if: always()
         continue-on-error: true
@@ -74,8 +69,10 @@ jobs:
             status="❌ Build Failure"
           fi
           read -r -d '' result_payload <<EOF
-          {"text":"${status}\n*Repository:* ${GITHUB_REPOSITORY}\n*Run #:* ${GITHUB_RUN_NUMBER}\n*URL:* ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"}
+          {"text":"${status}\n*Repo:* ${GITHUB_REPOSITORY}\n*Run #:* ${GITHUB_RUN_NUMBER}\n*URL:* ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"}
           EOF
-          curl -X POST -H "Content-Type: application/json" \
+          echo ">>> RESULT PAYLOAD:"
+          echo "$result_payload"
+          curl -v -X POST -H "Content-Type: application/json" \
                --data "$result_payload" \
                "${{ secrets.GOOGLE_CHAT_WEBHOOK }}" || true
