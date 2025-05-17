@@ -5,7 +5,7 @@ This is a core library for RTB. Will primarily be maintained for all entities.
 Can also be used for common functionalities to be used across different servicces.
 
 
-## Steps to build and publish
+## Steps to build and publish 
 1. Build this project locally `./gradlew clean build`
 2. Publish the artifact to your local m2 repository `./gradlew clean publish`
 3. Verify if the core library is available in your local .m2 repository.
