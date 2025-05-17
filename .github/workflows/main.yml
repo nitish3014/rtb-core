@@ -1,0 +1,87 @@
+name: CI Build Core
+
+on:
+  push:
+    branches: [dev]
+
+env:
+  AWS_REGION: us-east-1
+  S3_BUCKET_NAME: rtb-dev-artifact          # ← updated bucket name
+  S3_ARTIFACT_KEY: greenlight-rct-core-0.0.1-SNAPSHOT.jar
+
+jobs:
+  build:
+    runs-on: [self-hosted, slave]
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      # 1️⃣ CHECKOUT
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          ref: dev
+
+      # 2️⃣ NOTIFY START
+      - name: Notify Build Start
+        id: notify_start
+        continue-on-error: true
+        run: |
+          set +e
+          commit_details=$(git log -1 --pretty=format:'%s|%an')
+          commit_message=${commit_details%%|*}
+          committer_name=${commit_details##*|}
+          read -r -d '' payload <<EOF
+          {"text":"🚀 *Build Started*\n*Repository:* ${GITHUB_REPOSITORY}\n*Run #:* ${GITHUB_RUN_NUMBER}\n*Commit:* ${commit_message}\n*Author:* ${committer_name}\n*URL:* ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"}
+          EOF
+          curl -X POST -H "Content-Type: application/json" \
+               --data "$payload" \
+               "${{ secrets.GOOGLE_CHAT_WEBHOOK }}" || true
+
+      # 3️⃣ SET UP JAVA
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # 4️⃣ CLEAN & BUILD
+      - name: Clean & Build
+        run: ./gradlew clean build -x test
+
+      # 5️⃣ PUBLISH TO SLAVE DIR
+      - name: Publish Artifact to Slave Directory
+        run: |
+          mkdir -p /home/ubuntu/core-artifact
+          cp build/libs/*.jar /home/ubuntu/core-artifact/${{ env.S3_ARTIFACT_KEY }}
+
+      # 6️⃣ CONFIGURE AWS & PUBLISH TO S3
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Publish Artifact to S3
+        run: |
+          aws s3 cp build/libs/*.jar s3://${{ env.S3_BUCKET_NAME }}/${{ env.S3_ARTIFACT_KEY }}
+
+      # 7️⃣ NOTIFY RESULT
+      - name: Notify Build Result
+        if: always()
+        continue-on-error: true
+        run: |
+          set +e
+          if [[ "${{ job.status }}" == "success" ]]; then
+            status="✅ Build Success"
+          else
+            status="❌ Build Failure"
+          fi
+          read -r -d '' result_payload <<EOF
+          {"text":"${status}\n*Repository:* ${GITHUB_REPOSITORY}\n*Run #:* ${GITHUB_RUN_NUMBER}\n*URL:* ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"}
+          EOF
+          curl -X POST -H "Content-Type: application/json" \
+               --data "$result_payload" \
+               "${{ secrets.GOOGLE_CHAT_WEBHOOK }}" || true
