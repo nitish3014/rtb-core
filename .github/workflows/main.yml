@@ -2,7 +2,7 @@ name: CI Build Core
 
 on:
   push:
-    branches: [dev]
+    branches: [main]
 
 env:
   AWS_REGION: us-east-1
