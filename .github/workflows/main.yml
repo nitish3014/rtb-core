@@ -20,27 +20,17 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-        with:
-          ref: main
 
       - name: Notify Build Start
         continue-on-error: true
         run: |
-          set +e
           commit_details=$(git log -1 --pretty=format:'%s|%an')
           commit_message=${commit_details%%|*}
           committer_name=${commit_details##*|}
           read -r -d '' payload <<EOF
-{"text":"🚀 *Build Started*
-*Repo:* ${GITHUB_REPOSITORY}
-*Run #:* ${GITHUB_RUN_NUMBER}
-*Commit:* ${commit_message}
-*By:* ${committer_name}
-*URL:* ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"}
+{"text": "🚀 *Build Started*\n*Repo:* ${GITHUB_REPOSITORY}\n*Run #:* ${GITHUB_RUN_NUMBER}\n*Commit:* ${commit_message}\n*By:* ${committer_name}\n*URL:* ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"}
 EOF
-          echo ">>> START PAYLOAD:"
-          echo "$payload"
-          curl -v -X POST -H "Content-Type: application/json" \
+          curl -X POST -H "Content-Type: application/json" \
                --data "$payload" \
                "${{ secrets.GOOGLE_CHAT_WEBHOOK }}" || true
 
@@ -50,16 +40,6 @@ EOF
           aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region:            ${{ env.AWS_REGION }}
-
-      - name: Debug AWS identity
-        run: |
-          aws sts get-caller-identity || echo "❌ No AWS creds available"
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v3
-        with:
-          distribution: temurin
-          java-version: 17
 
       - name: Clean & Build
         run: ./gradlew clean build -x test
@@ -72,20 +52,14 @@ EOF
         if: always()
         continue-on-error: true
         run: |
-          set +e
           if [[ "${{ job.status }}" == "success" ]]; then
             status="✅ Build Success"
           else
             status="❌ Build Failure"
           fi
           read -r -d '' result_payload <<EOF
-{"text":"${status}
-*Repo:* ${GITHUB_REPOSITORY}
-*Run #:* ${GITHUB_RUN_NUMBER}
-*URL:* ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"}
+{"text": "${status}\n*Repo:* ${GITHUB_REPOSITORY}\n*Run #:* ${GITHUB_RUN_NUMBER}\n*URL:* ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"}
 EOF
-          echo ">>> RESULT PAYLOAD:"
-          echo "$result_payload"
-          curl -v -X POST -H "Content-Type: application/json" \
+          curl -X POST -H "Content-Type: application/json" \
                --data "$result_payload" \
                "${{ secrets.GOOGLE_CHAT_WEBHOOK }}" || true
