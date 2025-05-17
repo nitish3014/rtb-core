@@ -18,22 +18,42 @@ jobs:
         shell: bash
 
     steps:
-      - name: Checkout code
+      # ──── CHECKOUT CODE ────
+      - name: Checkout repository
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 1  # Only fetch the most recent commit
 
+      # ──── BUILD NOTIFICATION ────
       - name: Notify Build Start
         continue-on-error: true
         run: |
-          commit_details=$(git log -1 --pretty=format:'%s|%an')
-          commit_message=${commit_details%%|*}
-          committer_name=${commit_details##*|}
-          read -r -d '' payload <<EOF
-          {"text": "🚀 *Build Started*\n*Repo:* ${GITHUB_REPOSITORY}\n*Run #:* ${GITHUB_RUN_NUMBER}\n*Commit:* ${commit_message}\n*By:* ${committer_name}\n*URL:* ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"}
-          EOF
+          # Set default values in case git commands fail
+          commit_message="[No commit message]"
+          committer_name="[Unknown]"
+          
+          # Try to get commit details (silence errors)
+          if commit_details=$(git log -1 --pretty=format:'%s|%an' 2>/dev/null); then
+            commit_message=${commit_details%%|*}
+            committer_name=${commit_details##*|}
+          fi
+          
+          # Create JSON payload
+          payload=$(jq -n \
+            --arg text "🚀 *Build Started*
+*Repo:* $GITHUB_REPOSITORY
+*Run #:* $GITHUB_RUN_NUMBER
+*Commit:* $commit_message
+*By:* $committer_name
+*URL:* $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            '{text: $text}')
+          
+          # Send notification (continue even if it fails)
           curl -X POST -H "Content-Type: application/json" \
-               --data "$payload" \
-               "${{ secrets.GOOGLE_CHAT_WEBHOOK }}" || true
+            --data "$payload" \
+            "${{ secrets.GOOGLE_CHAT_WEBHOOK }}" || echo "Notification failed - continuing"
 
+      # ──── AWS CONFIGURATION ────
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -41,13 +61,29 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      # ──── BUILD WITH GRADLE ────
       - name: Clean & Build
-        run: ./gradlew clean build -x test
+        run: |
+          ./gradlew clean build -x test || {
+            echo "Build failed"
+            exit 1
+          }
 
+      # ──── ARTIFACT UPLOAD ────
       - name: Publish Artifact to S3
         run: |
-          aws s3 cp build/libs/*.jar s3://${{ env.S3_BUCKET_NAME }}/${{ env.S3_ARTIFACT_KEY }}
+          # Find the built JAR file
+          JAR_FILE=$(find build/libs -name '*.jar' | head -1)
+          
+          if [ -z "$JAR_FILE" ]; then
+            echo "Error: No JAR file found in build/libs/"
+            exit 1
+          fi
+          
+          echo "Uploading $JAR_FILE to S3"
+          aws s3 cp "$JAR_FILE" "s3://${{ env.S3_BUCKET_NAME }}/${{ env.S3_ARTIFACT_KEY }}"
 
+      # ──── RESULT NOTIFICATION ────
       - name: Notify Build Result
         if: always()
         continue-on-error: true
@@ -57,9 +93,14 @@ jobs:
           else
             status="❌ Build Failure"
           fi
-          read -r -d '' result_payload <<EOF
-          {"text": "${status}\n*Repo:* ${GITHUB_REPOSITORY}\n*Run #:* ${GITHUB_RUN_NUMBER}\n*URL:* ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"}
-          EOF
+          
+          payload=$(jq -n \
+            --arg text "$status
+*Repo:* $GITHUB_REPOSITORY
+*Run #:* $GITHUB_RUN_NUMBER
+*URL:* $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            '{text: $text}')
+          
           curl -X POST -H "Content-Type: application/json" \
-               --data "$result_payload" \
-               "${{ secrets.GOOGLE_CHAT_WEBHOOK }}" || true
+            --data "$payload" \
+            "${{ secrets.GOOGLE_CHAT_WEBHOOK }}" || echo "Result notification failed"
